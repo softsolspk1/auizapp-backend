@@ -1,0 +1,37 @@
+Develop a MVP of quiz competition Mobile App and Web Admin Panel. 
+
+A) App with two options:
+1) Playing solely
+2) Play in Group Comoetition if  2 or more players playing together
+
+
+B) Signup:
+Doctor Name
+Designation 
+Specialty 
+Hospital Name
+PMDC #
+City
+Phone numbers. 
+Email ID
+
+C) Account approval by Admin
+
+D) Adnin will be able to Activate User Account
+
+E) Admin will add Quiz Questions by category wise.
+
+F) Admin will also add Category
+
+G) Complete Analytics on Admin Panel
+
+H) There is a Point Earning module in it in which User will play and earn points on achieving Quiz Score.
+
+I) Each correct question will get 10 points and false answers that will be deducted 5 points.
+
+J)  in Competition or Multiplayer Quiz, the Score will be Doubled, I.e. Every correct answer will give 20 points, and wrong answers will deduct 5 points.
+
+Logo is available in /logo.png file and also use /zeegap.jpeg in SPlash Footer and Login Footer and Forgot Footer and SignUp Footer Pages.
+
+
+Use Color scheme as in /header.jpeg with same color combination and fonts and styling.

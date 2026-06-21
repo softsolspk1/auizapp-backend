@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Specialty Quiz Demo</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .title {
+            font-size: 2.5em;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #6b7280;
+            font-size: 1.2em;
+        }
+        
+        .feature-card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .feature-title {
+            font-size: 1.3em;
+            color: #1f2937;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .feature-description {
+            color: #4b5563;
+            line-height: 1.6;
+        }
+        
+        .timer-demo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #3b82f6;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        
+        .timer-circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #10b981;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .timer-circle.warning {
+            background: #f59e0b;
+        }
+        
+        .timer-circle.danger {
+            background: #ef4444;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .question-demo {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        
+        .question-text {
+            font-size: 1.1em;
+            color: #1f2937;
+            margin-bottom: 15px;
+        }
+        
+        .option {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .option:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        
+        .option-label {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: 600;
+            color: #6b7280;
+        }
+        
+        .results-demo {
+            background: #fef2f2;
+            border: 2px solid #fecaca;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        
+        .answer-comparison {
+            display: flex;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .answer-box {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .wrong-answer {
+            background: #fecaca;
+            border: 2px solid #fca5a5;
+            color: #dc2626;
+        }
+        
+        .correct-answer {
+            background: #dcfce7;
+            border: 2px solid #86efac;
+            color: #16a34a;
+        }
+        
+        .explanation {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 8px;
+        }
+        
+        .explanation-label {
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 8px;
+        }
+        
+        .explanation-text {
+            color: #1e40af;
+            line-height: 1.6;
+        }
+        
+        .specialty-questions {
+            background: #f0f9ff;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .question-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .question-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #e0f2fe;
+        }
+        
+        .question-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .difficulty {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .difficulty.easy {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        
+        .difficulty.medium {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .difficulty.hard {
+            background: #fecaca;
+            color: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🏥 Specialty Quiz Features</h1>
+            <p class="subtitle">Enhanced Quiz Experience with 30-Second Timer & Detailed Results</p>
+        </div>
+
+        <div class="feature-card">
+            <h3 class="feature-title">⏱️ 30-Second Timer with Visual Feedback</h3>
+            <p class="feature-description">
+                Each question has a 30-second countdown timer with color-coded visual feedback:
+            </p>
+            
+            <div class="timer-demo">
+                <div class="timer-circle">25s</div>
+                <span>Green: 20+ seconds (plenty of time)</span>
+            </div>
+            
+            <div class="timer-demo">
+                <div class="timer-circle warning">15s</div>
+                <span>Yellow: 10-20 seconds (moderate urgency)</span>
+            </div>
+            
+            <div class="timer-demo">
+                <div class="timer-circle danger">5s</div>
+                <span>Red: <10 seconds (urgent - pulsing animation)</span>
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <h3 class="feature-title">📝 Sample Question Demo</h3>
+            <div class="question-demo">
+                <div class="question-text">
+                    Which medical specialty focuses on the diagnosis and treatment of heart diseases?
+                </div>
+                <div class="option">
+                    <div class="option-label">A</div>
+                    <span>Cardiology</span>
+                </div>
+                <div class="option">
+                    <div class="option-label">B</div>
+                    <span>Neurology</span>
+                </div>
+                <div class="option">
+                    <div class="option-label">C</div>
+                    <span>Dermatology</span>
+                </div>
+                <div class="option">
+                    <div class="option-label">D</div>
+                    <span>Orthopedics</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <h3 class="feature-title">📊 Detailed Results with Wrong Answer Review</h3>
+            <p class="feature-description">
+                After completing the quiz, users can review their wrong answers with detailed explanations:
+            </p>
+            
+            <div class="results-demo">
+                <h4>Question 3: Which specialist would you consult for a skin rash?</h4>
+                
+                <div class="answer-comparison">
+                    <div class="answer-box wrong-answer">
+                        <strong>Your Answer:</strong><br>
+                        Cardiologist
+                    </div>
+                    <div class="answer-box correct-answer">
+                        <strong>Correct Answer:</strong><br>
+                        Dermatologist
+                    </div>
+                </div>
+                
+                <div class="explanation">
+                    <div class="explanation-label">Explanation:</div>
+                    <div class="explanation-text">
+                        Dermatologists specialize in conditions affecting the skin, hair, and nails. 
+                        They are the medical specialists you should consult for skin rashes, moles, 
+                        and other dermatological conditions.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <h3 class="feature-title">🏥 10 Specialty Questions Added</h3>
+            <div class="specialty-questions">
+                <p><strong>Medical specialties covered:</strong></p>
+                <ul class="question-list">
+                    <li>Cardiology - Heart diseases <span class="difficulty easy">Easy</span></li>
+                    <li>Neurology - Brain and nervous system <span class="difficulty easy">Easy</span></li>
+                    <li>Dermatology - Skin conditions <span class="difficulty easy">Easy</span></li>
+                    <li>Pulmonology - Lung and respiratory system <span class="difficulty medium">Medium</span></li>
+                    <li>Gastroenterology - Digestive system <span class="difficulty medium">Medium</span></li>
+                    <li>Endocrinology - Hormone disorders <span class="difficulty medium">Medium</span></li>
+                    <li>Nephrology - Kidney diseases <span class="difficulty hard">Hard</span></li>
+                    <li>Oncology - Cancer treatment <span class="difficulty hard">Hard</span></li>
+                    <li>Rheumatology - Joint and autoimmune diseases <span class="difficulty hard">Hard</span></li>
+                    <li>Gastroenterology - Colonoscopy procedures <span class="difficulty medium">Medium</span></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <h3 class="feature-title">✨ Key Features Implemented</h3>
+            <ul style="color: #4b5563; line-height: 1.8;">
+                <li>✅ 30-second timer with visual color coding (Green → Yellow → Red)</li>
+                <li>✅ Pulsing animation when time is running low</li>
+                <li>✅ Auto-submit when timer expires</li>
+                <li>✅ Detailed wrong answer review with explanations</li>
+                <li>✅ Color-coded answer comparison (Red for wrong, Green for correct)</li>
+                <li>✅ Expandable results section</li>
+                <li>✅ 10 specialty questions with varying difficulty levels</li>
+                <li>✅ Comprehensive explanations for learning</li>
+                <li>✅ Question numbering and organization</li>
+                <li>✅ Responsive design for mobile and web</li>
+            </ul>
+        </div>
+
+        <div class="feature-card">
+            <h3 class="feature-title">🚀 How to Test</h3>
+            <ol style="color: #4b5563; line-height: 1.8;">
+                <li>Start the server: <code>cd server && npm start</code></li>
+                <li>Add specialty questions: <code>node add-specialty-questions.js</code></li>
+                <li>Open the mobile app and navigate to Specialty category</li>
+                <li>Experience the 30-second timer and visual feedback</li>
+                <li>Complete the quiz and review detailed wrong answers</li>
+                <li>Learn from explanations and correct answer highlights</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>
+

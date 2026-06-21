@@ -1,0 +1,21 @@
+{
+  "name": "hilton-quiz-app",
+  "version": "1.0.0",
+  "description": "Quiz competition mobile app and web admin panel for doctors",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run admin\"",
+    "server": "cd server && npm run dev",
+    "admin": "cd admin-panel && npm start",
+    "mobile": "cd mobile-app && npm start",
+    "install-all": "npm install && cd server && npm install && cd ../admin-panel && npm install && cd ../mobile-app && npm install"
+  },
+  "keywords": ["quiz", "medical", "doctors", "competition"],
+  "author": "Hilton Quiz App",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+
+
