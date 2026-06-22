@@ -1,7 +1,9 @@
+import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createDrawerNavigator } from '@react-navigation/drawer';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -24,9 +26,12 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import MultiplayerScreen from './src/screens/MultiplayerScreen';
 import MultiplayerQuizScreen from './src/screens/MultiplayerQuizScreen';
+import PinQuizScreen from './src/screens/PinQuizScreen';
+import WardActivitiesScreen from './src/screens/WardActivitiesScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
+const Drawer = createDrawerNavigator();
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -70,6 +75,43 @@ function MainTabs() {
   );
 }
 
+function DrawerNavigator() {
+  return (
+    <Drawer.Navigator
+      screenOptions={{
+        headerShown: false,
+        drawerActiveTintColor: '#8b5cf6',
+        drawerInactiveTintColor: '#4b5563',
+        drawerLabelStyle: {
+          fontFamily: 'Inter-Medium',
+          fontSize: 16,
+        },
+      }}
+    >
+      <Drawer.Screen 
+        name="HomeTabs" 
+        component={MainTabs} 
+        options={{
+          title: 'Home',
+          drawerIcon: ({ color }) => (
+            <Ionicons name="home-outline" size={24} color={color} />
+          )
+        }}
+      />
+      <Drawer.Screen 
+        name="WardActivities" 
+        component={WardActivitiesScreen} 
+        options={{
+          title: 'Ward Activity',
+          drawerIcon: ({ color }) => (
+            <Ionicons name="medical-outline" size={24} color={color} />
+          )
+        }}
+      />
+    </Drawer.Navigator>
+  );
+}
+
 function AppNavigator() {
   const { user, loading } = useAuth();
 
@@ -82,12 +124,13 @@ function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
           <>
-            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="Drawer" component={DrawerNavigator} />
             <Stack.Screen name="Category" component={CategoryScreen} />
             <Stack.Screen name="Quiz" component={QuizScreen} />
             <Stack.Screen name="Results" component={ResultsScreen} />
             <Stack.Screen name="Multiplayer" component={MultiplayerScreen} />
             <Stack.Screen name="MultiplayerQuiz" component={MultiplayerQuizScreen} />
+            <Stack.Screen name="PinQuiz" component={PinQuizScreen} />
           </>
         ) : (
           <Stack.Screen name="Auth" component={AuthStack} />

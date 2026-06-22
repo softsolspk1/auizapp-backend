@@ -1,7 +1,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const User = require('../models/User');
+const prisma = require('../db');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -27,25 +28,36 @@ router.post('/register', [
     const { doctorName, designation, specialty, hospitalName, pmdcNumber, city, phoneNumber, email, password } = req.body;
 
     // Check if user already exists
-    let user = await User.findOne({ $or: [{ email }, { pmdcNumber }] });
-    if (user) {
+    let existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email },
+          { pmdcNumber }
+        ]
+      }
+    });
+
+    if (existingUser) {
       return res.status(400).json({ message: 'User already exists with this email or PMDC number' });
     }
 
-    // Create new user
-    user = new User({
-      doctorName,
-      designation,
-      specialty,
-      hospitalName,
-      pmdcNumber,
-      city,
-      phoneNumber,
-      email,
-      password
-    });
+    // Hash password before saving
+    const hashedPassword = await bcrypt.hash(password, 12);
 
-    await user.save();
+    // Create new user
+    const user = await prisma.user.create({
+      data: {
+        doctorName,
+        designation,
+        specialty,
+        hospitalName,
+        pmdcNumber,
+        city,
+        phoneNumber,
+        email,
+        password: hashedPassword
+      }
+    });
 
     // Generate JWT token
     const payload = {
@@ -88,7 +100,7 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Check if user exists
-    const user = await User.findOne({ email });
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
@@ -98,15 +110,22 @@ router.post('/login', [
       return res.status(400).json({ message: 'Account is deactivated' });
     }
 
+    // Check if user is approved (Admins bypass this)
+    if (!user.isApproved && user.role !== 'admin') {
+      return res.status(400).json({ message: 'Account pending approval from admin' });
+    }
+
     // Check password
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() }
+    });
 
     // Generate JWT token
     const payload = {
@@ -139,7 +158,30 @@ router.post('/login', [
 // Get current user
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        doctorName: true,
+        designation: true,
+        specialty: true,
+        hospitalName: true,
+        pmdcNumber: true,
+        city: true,
+        phoneNumber: true,
+        email: true,
+        isApproved: true,
+        isActive: true,
+        role: true,
+        totalPoints: true,
+        gamesPlayed: true,
+        correctAnswers: true,
+        wrongAnswers: true,
+        lastLogin: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
     res.json(user);
   } catch (error) {
     console.error(error.message);
@@ -148,5 +190,3 @@ router.get('/me', auth, async (req, res) => {
 });
 
 module.exports = router;
-
-

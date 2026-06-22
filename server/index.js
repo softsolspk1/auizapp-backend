@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -26,6 +25,7 @@ app.use('/api/categories', require('./routes/categories'));
 app.use('/api/questions', require('./routes/questions'));
 app.use('/api/quiz', require('./routes/quiz'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/pins', require('./routes/pins'));
 
 // Socket.io for real-time multiplayer
 io.on('connection', (socket) => {
@@ -49,10 +49,11 @@ io.on('connection', (socket) => {
 // Make io accessible to routes
 app.set('io', io);
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+// Connect to DB via Prisma
+const prisma = require('./db');
+prisma.$connect()
+  .then(() => console.log('Connected to PostgreSQL via Prisma'))
+  .catch(err => console.error('Database connection error:', err));
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {

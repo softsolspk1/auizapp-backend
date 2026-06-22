@@ -16,7 +16,7 @@ const SplashScreen = () => {
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.title}>Neuro Genius Challenge</Text>
+        <Text style={styles.title}>I-Genius</Text>
         <Text style={styles.subtitle}>Medical Knowledge Competition</Text>
       </View>
       

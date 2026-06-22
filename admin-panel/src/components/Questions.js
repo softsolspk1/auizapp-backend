@@ -74,7 +74,7 @@ const Questions = () => {
       delete questionData.option4;
 
       if (editingQuestion) {
-        await axios.put(`/api/questions/${editingQuestion._id}`, questionData);
+        await axios.put(`/api/questions/${editingQuestion.id}`, questionData);
         toast.success('Question updated successfully');
       } else {
         await axios.post('/api/questions', questionData);
@@ -99,7 +99,7 @@ const Questions = () => {
       option4: question.options[3],
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
-      category: question.category._id,
+      category: question.category.id,
       difficulty: question.difficulty,
       isActive: question.isActive
     });
@@ -175,7 +175,7 @@ const Questions = () => {
             >
               <option value="">All Categories</option>
               {categories.map(category => (
-                <option key={category._id} value={category._id}>
+                <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
               ))}
@@ -197,7 +197,7 @@ const Questions = () => {
       {/* Questions List */}
       <div className="space-y-4">
         {filteredQuestions.map((question) => (
-          <div key={question._id} className="card">
+          <div key={question.id} className="card">
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -254,7 +254,7 @@ const Questions = () => {
                   <Edit className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => handleDelete(question._id)}
+                  onClick={() => handleDelete(question.id)}
                   className="text-red-600 hover:text-red-900"
                   title="Delete Question"
                 >
@@ -319,7 +319,7 @@ const Questions = () => {
                   >
                     <option value="">Select Category</option>
                     {categories.map(category => (
-                      <option key={category._id} value={category._id}>
+                      <option key={category.id} value={category.id}>
                         {category.name}
                       </option>
                     ))}

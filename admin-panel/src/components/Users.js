@@ -8,9 +8,10 @@ import {
   EyeOff,
   Search,
   Filter,
-  MoreVertical,
   UserCheck,
-  UserX
+  UserX,
+  Shield,
+  ShieldOff
 } from 'lucide-react';
 
 const Users = () => {
@@ -66,6 +67,16 @@ const Users = () => {
     }
   };
 
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      await axios.put(`/api/users/${userId}/role`, { role: newRole });
+      toast.success(`User role updated to ${newRole}`);
+      loadUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update user role');
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -88,6 +99,16 @@ const Users = () => {
       return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactive</span>;
     }
     return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>;
+  };
+
+  const getRoleBadge = (role) => {
+    if (role === 'admin') {
+      return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Admin</span>;
+    }
+    if (role === 'subadmin') {
+      return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Sub-Admin</span>;
+    }
+    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">User</span>;
   };
 
   if (loading) {
@@ -147,14 +168,14 @@ const Users = () => {
                 <th className="table-header">Specialty</th>
                 <th className="table-header">Hospital</th>
                 <th className="table-header">PMDC #</th>
-                <th className="table-header">Status</th>
+                <th className="table-header">Role & Status</th>
                 <th className="table-header">Points</th>
                 <th className="table-header">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredUsers.map((user) => (
-                <tr key={user._id}>
+                <tr key={user.id}>
                   <td className="table-cell">
                     <div>
                       <div className="font-medium text-gray-900">{user.doctorName}</div>
@@ -165,13 +186,18 @@ const Users = () => {
                   <td className="table-cell">{user.specialty}</td>
                   <td className="table-cell">{user.hospitalName}</td>
                   <td className="table-cell">{user.pmdcNumber}</td>
-                  <td className="table-cell">{getStatusBadge(user)}</td>
+                  <td className="table-cell">
+                    <div className="flex flex-col gap-1 items-start">
+                      {getRoleBadge(user.role)}
+                      {getStatusBadge(user)}
+                    </div>
+                  </td>
                   <td className="table-cell font-semibold text-primary-600">{user.totalPoints}</td>
                   <td className="table-cell">
                     <div className="flex items-center space-x-2">
                       {!user.isApproved && (
                         <button
-                          onClick={() => handleApprove(user._id)}
+                          onClick={() => handleApprove(user.id)}
                           className="text-green-600 hover:text-green-900"
                           title="Approve User"
                         >
@@ -180,7 +206,7 @@ const Users = () => {
                       )}
                       {user.isActive ? (
                         <button
-                          onClick={() => handleDeactivate(user._id)}
+                          onClick={() => handleDeactivate(user.id)}
                           className="text-red-600 hover:text-red-900"
                           title="Deactivate User"
                         >
@@ -188,13 +214,34 @@ const Users = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleActivate(user._id)}
+                          onClick={() => handleActivate(user.id)}
                           className="text-green-600 hover:text-green-900"
                           title="Activate User"
                         >
                           <UserCheck className="h-5 w-5" />
                         </button>
                       )}
+                      
+                      {user.role !== 'admin' && (
+                        user.role === 'subadmin' ? (
+                          <button
+                            onClick={() => handleRoleChange(user.id, 'user')}
+                            className="text-orange-600 hover:text-orange-900"
+                            title="Remove Sub-Admin"
+                          >
+                            <ShieldOff className="h-5 w-5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleRoleChange(user.id, 'subadmin')}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Make Sub-Admin"
+                          >
+                            <Shield className="h-5 w-5" />
+                          </button>
+                        )
+                      )}
+
                       <button
                         onClick={() => {
                           setSelectedUser(user);

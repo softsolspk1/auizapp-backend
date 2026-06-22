@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import { API_URL } from '../config';
 
 const QuizScreen = ({ navigation, route }) => {
   const { category, questions, gameMode } = route.params;
@@ -22,6 +23,7 @@ const QuizScreen = ({ navigation, route }) => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [quizStarted, setQuizStarted] = useState(false);
   const [quizCompleted, setQuizCompleted] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
   
   const progressAnimation = useRef(new Animated.Value(0)).current;
   const timerAnimation = useRef(new Animated.Value(1)).current;
@@ -93,7 +95,7 @@ const QuizScreen = ({ navigation, route }) => {
     }
 
     const answer = {
-      questionId: currentQuestion._id,
+      questionId: currentQuestion.id,
       answer: answerIndex,
       timeSpent: 30 - timeLeft,
       isTimeout
@@ -115,8 +117,8 @@ const QuizScreen = ({ navigation, route }) => {
     setQuizCompleted(true);
     
     try {
-      const response = await axios.post('http://localhost:5000/api/quiz/submit', {
-        sessionId: 'temp-session-id', // This should be created when starting quiz
+      const response = await axios.post(`${API_URL}/api/quiz/submit`, {
+        sessionId,
         answers: finalAnswers
       });
 
@@ -133,13 +135,24 @@ const QuizScreen = ({ navigation, route }) => {
     }
   };
 
-  const startQuiz = () => {
-    setQuizStarted(true);
-    Animated.timing(progressAnimation, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
+  const startQuiz = async () => {
+    try {
+      const response = await axios.post(`${API_URL}/api/quiz/start`, {
+        categoryId: category.id,
+        totalQuestions: questions.length,
+        gameMode
+      });
+      setSessionId(response.data.sessionId);
+      
+      setQuizStarted(true);
+      Animated.timing(progressAnimation, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to start quiz session');
+    }
   };
 
   if (!quizStarted) {

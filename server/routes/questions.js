@@ -1,6 +1,5 @@
 const express = require('express');
-const Question = require('../models/Question');
-const Category = require('../models/Category');
+const prisma = require('../db');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -8,18 +7,21 @@ const router = express.Router();
 // Get questions by category
 router.get('/category/:categoryId', async (req, res) => {
   try {
-    const { categoryId } = req.params;
-    const { limit = 10, difficulty } = req.query;
+    const categoryId = parseInt(req.params.categoryId);
+    const limit = parseInt(req.query.limit) || 10;
+    const { difficulty } = req.query;
 
-    let query = { category: categoryId, isActive: true };
+    let query = { categoryId, isActive: true };
     if (difficulty) {
       query.difficulty = difficulty;
     }
 
-    const questions = await Question.find(query)
-      .populate('category', 'name')
-      .limit(parseInt(limit))
-      .sort({ createdAt: -1 });
+    const questions = await prisma.question.findMany({
+      where: query,
+      include: { category: { select: { name: true } } },
+      take: limit,
+      orderBy: { createdAt: 'desc' }
+    });
 
     res.json(questions);
   } catch (error) {
@@ -35,19 +37,24 @@ router.get('/admin', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { category, difficulty, page = 1, limit = 20 } = req.query;
-    let query = {};
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const { category, difficulty } = req.query;
 
-    if (category) query.category = category;
+    let query = {};
+    if (category) query.categoryId = parseInt(category);
     if (difficulty) query.difficulty = difficulty;
 
-    const questions = await Question.find(query)
-      .populate('category', 'name')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Question.countDocuments(query);
+    const [questions, total] = await Promise.all([
+      prisma.question.findMany({
+        where: query,
+        include: { category: { select: { name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: (page - 1) * limit
+      }),
+      prisma.question.count({ where: query })
+    ]);
 
     res.json({
       questions,
@@ -80,25 +87,30 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ message: 'Correct answer must be between 0 and 3' });
     }
 
+    const categoryId = parseInt(category);
+
     // Check if category exists
-    const categoryExists = await Category.findById(category);
+    const categoryExists = await prisma.category.findUnique({ where: { id: categoryId } });
     if (!categoryExists) {
       return res.status(400).json({ message: 'Category not found' });
     }
 
-    const newQuestion = new Question({
-      question,
-      options,
-      correctAnswer,
-      explanation,
-      category,
-      difficulty: difficulty || 'medium'
+    const newQuestion = await prisma.question.create({
+      data: {
+        question,
+        options,
+        correctAnswer,
+        explanation,
+        categoryId,
+        difficulty: difficulty || 'medium'
+      }
     });
 
-    await newQuestion.save();
-
     // Update category question count
-    await Category.findByIdAndUpdate(category, { $inc: { questionCount: 1 } });
+    await prisma.category.update({
+      where: { id: categoryId },
+      data: { questionCount: { increment: 1 } }
+    });
 
     res.json(newQuestion);
   } catch (error) {
@@ -114,9 +126,10 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    const id = parseInt(req.params.id);
     const { question, options, correctAnswer, explanation, difficulty, isActive } = req.body;
 
-    const existingQuestion = await Question.findById(req.params.id);
+    const existingQuestion = await prisma.question.findUnique({ where: { id } });
     if (!existingQuestion) {
       return res.status(404).json({ message: 'Question not found' });
     }
@@ -131,15 +144,19 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(400).json({ message: 'Correct answer must be between 0 and 3' });
     }
 
-    existingQuestion.question = question || existingQuestion.question;
-    existingQuestion.options = options || existingQuestion.options;
-    existingQuestion.correctAnswer = correctAnswer !== undefined ? correctAnswer : existingQuestion.correctAnswer;
-    existingQuestion.explanation = explanation || existingQuestion.explanation;
-    existingQuestion.difficulty = difficulty || existingQuestion.difficulty;
-    existingQuestion.isActive = isActive !== undefined ? isActive : existingQuestion.isActive;
+    const updatedQuestion = await prisma.question.update({
+      where: { id },
+      data: {
+        question: question || existingQuestion.question,
+        options: options || existingQuestion.options,
+        correctAnswer: correctAnswer !== undefined ? correctAnswer : existingQuestion.correctAnswer,
+        explanation: explanation || existingQuestion.explanation,
+        difficulty: difficulty || existingQuestion.difficulty,
+        isActive: isActive !== undefined ? isActive : existingQuestion.isActive
+      }
+    });
 
-    await existingQuestion.save();
-    res.json(existingQuestion);
+    res.json(updatedQuestion);
   } catch (error) {
     console.error(error.message);
     res.status(500).send('Server error');
@@ -153,15 +170,19 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const question = await Question.findById(req.params.id);
+    const id = parseInt(req.params.id);
+    const question = await prisma.question.findUnique({ where: { id } });
     if (!question) {
       return res.status(404).json({ message: 'Question not found' });
     }
 
     // Update category question count
-    await Category.findByIdAndUpdate(question.category, { $inc: { questionCount: -1 } });
+    await prisma.category.update({
+      where: { id: question.categoryId },
+      data: { questionCount: { decrement: 1 } }
+    });
 
-    await Question.findByIdAndDelete(req.params.id);
+    await prisma.question.delete({ where: { id } });
     res.json({ message: 'Question deleted successfully' });
   } catch (error) {
     console.error(error.message);
@@ -176,15 +197,18 @@ router.get('/:id/stats', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const question = await Question.findById(req.params.id);
+    const id = parseInt(req.params.id);
+    const question = await prisma.question.findUnique({ where: { id } });
     if (!question) {
       return res.status(404).json({ message: 'Question not found' });
     }
 
+    const successRate = question.timesAnswered === 0 ? 0 : ((question.correctCount / question.timesAnswered) * 100).toFixed(2);
+
     res.json({
       timesAnswered: question.timesAnswered,
       correctCount: question.correctCount,
-      successRate: question.successRate
+      successRate: parseFloat(successRate)
     });
   } catch (error) {
     console.error(error.message);
@@ -193,5 +217,3 @@ router.get('/:id/stats', auth, async (req, res) => {
 });
 
 module.exports = router;
-
-

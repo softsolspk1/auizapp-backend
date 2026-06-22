@@ -6,12 +6,16 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  RefreshControl
+  RefreshControl,
+  Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
+import { API_URL } from '../config';
+
+const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -25,7 +29,7 @@ const HomeScreen = ({ navigation }) => {
 
   const loadCategories = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/categories');
+      const response = await axios.get(`${API_URL}/api/categories`);
       setCategories(response.data);
     } catch (error) {
       console.error('Error loading categories:', error);
@@ -45,6 +49,17 @@ const HomeScreen = ({ navigation }) => {
     if (hour < 12) return 'Good Morning';
     if (hour < 18) return 'Good Afternoon';
     return 'Good Evening';
+  };
+
+  const getCategoryIcon = (name) => {
+    const icons = {
+      'Cardiology': 'heart',
+      'Neurology': 'brain',
+      'Pediatrics': 'people',
+      'Surgery': 'medkit',
+      'General': 'medical'
+    };
+    return icons[name] || 'book';
   };
 
   return (
@@ -112,7 +127,32 @@ const HomeScreen = ({ navigation }) => {
 
         {/* Categories */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quiz Categories</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Ward Activity</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.pinQuizCard}
+            onPress={() => navigation.navigate('WardActivities')}
+          >
+            <LinearGradient
+              colors={['#8b5cf6', '#6d28d9']}
+              style={styles.pinQuizGradient}
+            >
+              <Ionicons name="medical" size={32} color="white" />
+              <View style={styles.pinQuizTextContainer}>
+                <Text style={styles.pinQuizTitle}>Ward Activities</Text>
+                <Text style={styles.pinQuizDesc}>View activities in your city</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="white" />
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+            <Text style={styles.sectionTitle}>Categories</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Categories')}>
+              <Text style={styles.seeAllText}>See All</Text>
+            </TouchableOpacity>
+          </View>
           {loading ? (
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>Loading categories...</Text>
@@ -121,20 +161,32 @@ const HomeScreen = ({ navigation }) => {
             <View style={styles.categoriesGrid}>
               {categories.map((category) => (
                 <TouchableOpacity
-                  key={category._id}
+                  key={category.id}
                   style={styles.categoryCard}
                   onPress={() => navigation.navigate('Category', { category })}
                 >
-                  <View style={styles.categoryIcon}>
-                    <Ionicons name="book" size={24} color="#3b82f6" />
-                  </View>
-                  <Text style={styles.categoryName}>{category.name}</Text>
-                  <Text style={styles.categoryDescription}>{category.description}</Text>
-                  <View style={styles.categoryStats}>
-                    <Text style={styles.categoryQuestionCount}>
-                      {category.questionCount} questions
+                  <LinearGradient
+                    colors={['#ffffff', '#f8fafc']}
+                    style={styles.categoryGradient}
+                  >
+                    <View style={styles.categoryHeader}>
+                      <View style={styles.categoryIconContainer}>
+                        <Ionicons 
+                          name={getCategoryIcon(category.name)} 
+                          size={28} 
+                          color="#3b82f6" 
+                        />
+                      </View>
+                      <View style={styles.questionCountBadge}>
+                        <Text style={styles.questionCountText}>
+                          {category.questionCount} Qs
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.categoryTitle} numberOfLines={2}>
+                      {category.name}
                     </Text>
-                  </View>
+                  </LinearGradient>
                 </TouchableOpacity>
               ))}
             </View>
@@ -258,6 +310,32 @@ const styles = StyleSheet.create({
   loadingText: {
     color: '#6b7280',
     fontSize: 16,
+    fontFamily: 'Inter-Medium',
+  },
+  pinQuizCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 12,
+  },
+  pinQuizGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pinQuizTextContainer: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  pinQuizTitle: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
+  },
+  pinQuizDesc: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+    marginTop: 4,
     fontFamily: 'Inter-Regular',
   },
   categoriesGrid: {

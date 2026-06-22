@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   LogOut,
-  User
+  User,
+  Key
 } from 'lucide-react';
 
 const Layout = ({ children }) => {
@@ -23,8 +24,13 @@ const Layout = ({ children }) => {
     { name: 'Users', href: '/users', icon: Users },
     { name: 'Categories', href: '/categories', icon: FolderOpen },
     { name: 'Questions', href: '/questions', icon: HelpCircle },
+    { name: 'PINs', href: '/pins', icon: Key },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   ];
+
+  const filteredNavigation = user?.role === 'subadmin' 
+    ? navigation.filter(item => item.name === 'PINs')
+    : navigation;
 
   const isCurrentPath = (path) => {
     if (path === '/' && location.pathname === '/') return true;
@@ -40,8 +46,8 @@ const Layout = ({ children }) => {
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center">
-              <img src="/logo.png" alt="Neuro Genius Challenge" className="h-12 w-12" />
-              <span className="ml-2 text-xl font-bold text-gray-900">Neuro Genius Challenge</span>
+              <img src="/logo.png" alt="I-Genius" className="h-12 w-12" />
+              <span className="ml-2 text-xl font-bold text-gray-900">I-Genius</span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -51,7 +57,7 @@ const Layout = ({ children }) => {
             </button>
           </div>
           <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => {
+            {filteredNavigation.map((item) => {
               const Icon = item.icon;
               return (
                 <Link
@@ -77,11 +83,11 @@ const Layout = ({ children }) => {
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
           <div className="flex h-16 items-center px-4">
-            <img src="/logo.png" alt="Neuro Genius Challenge" className="h-12 w-12" />
-            <span className="ml-2 text-xl font-bold text-gray-900">Neuro Genius Challenge</span>
+            <img src="/logo.png" alt="I-Genius" className="h-12 w-12" />
+            <span className="ml-2 text-xl font-bold text-gray-900">I-Genius</span>
           </div>
           <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => {
+            {filteredNavigation.map((item) => {
               const Icon = item.icon;
               return (
                 <Link

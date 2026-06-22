@@ -1,49 +1,61 @@
 const express = require('express');
-const Question = require('../models/Question');
-const QuizSession = require('../models/QuizSession');
-const User = require('../models/User');
+const prisma = require('../db');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
+
+// Helper function to get random questions
+async function getRandomQuestions(categoryId, count) {
+  // Get all active question IDs for the category
+  const allQuestions = await prisma.question.findMany({
+    where: { categoryId, isActive: true },
+    select: { id: true, question: true, options: true, difficulty: true, correctAnswer: true }
+  });
+
+  if (allQuestions.length === 0) return [];
+
+  // Shuffle array
+  const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, count);
+}
 
 // Start new quiz session
 router.post('/start', auth, async (req, res) => {
   try {
     const { categoryId, totalQuestions = 10, gameMode = 'single' } = req.body;
+    const catId = parseInt(categoryId);
 
-    // Get random questions from category
-    const questions = await Question.aggregate([
-      { $match: { category: categoryId, isActive: true } },
-      { $sample: { size: parseInt(totalQuestions) } }
-    ]);
+    const questions = await getRandomQuestions(catId, parseInt(totalQuestions));
 
     if (questions.length === 0) {
       return res.status(400).json({ message: 'No questions available in this category' });
     }
 
     // Create quiz session
-    const quizSession = new QuizSession({
-      userId: req.user.id,
-      category: categoryId,
-      questions: questions.map(q => ({
-        questionId: q._id
-      })),
-      totalQuestions: questions.length,
-      gameMode
+    const quizSession = await prisma.quizSession.create({
+      data: {
+        userId: req.user.id,
+        categoryId: catId,
+        totalQuestions: questions.length,
+        gameMode,
+        questions: {
+          create: questions.map(q => ({
+            questionId: q.id
+          }))
+        }
+      }
     });
-
-    await quizSession.save();
 
     // Return questions without correct answers
     const questionsForUser = questions.map(q => ({
-      id: q._id,
+      id: q.id,
       question: q.question,
       options: q.options,
       difficulty: q.difficulty
     }));
 
     res.json({
-      sessionId: quizSession._id,
+      sessionId: quizSession.id,
       questions: questionsForUser,
       totalQuestions: questions.length
     });
@@ -57,16 +69,21 @@ router.post('/start', auth, async (req, res) => {
 router.post('/submit', auth, async (req, res) => {
   try {
     const { sessionId, answers } = req.body;
+    const id = parseInt(sessionId);
 
-    const quizSession = await QuizSession.findById(sessionId)
-      .populate('questions.questionId')
-      .populate('category', 'name');
+    const quizSession = await prisma.quizSession.findUnique({
+      where: { id },
+      include: {
+        questions: { include: { question: true } },
+        category: { select: { name: true } }
+      }
+    });
 
     if (!quizSession) {
       return res.status(404).json({ message: 'Quiz session not found' });
     }
 
-    if (quizSession.userId.toString() !== req.user.id) {
+    if (quizSession.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -79,16 +96,20 @@ router.post('/submit', auth, async (req, res) => {
     let wrongAnswers = 0;
     const pointMultiplier = quizSession.gameMode === 'multiplayer' ? 2 : 1;
 
+    let timeSpentTotal = 0;
+
     // Process each answer
     for (let i = 0; i < quizSession.questions.length; i++) {
-      const questionData = quizSession.questions[i];
-      const userAnswer = answers[i];
+      const sessionQuestion = quizSession.questions[i];
+      const userAnswer = answers[i] || {};
       
-      questionData.userAnswer = userAnswer.answer;
-      questionData.timeSpent = userAnswer.timeSpent || 0;
+      const timeSpent = userAnswer.timeSpent || 0;
+      timeSpentTotal += timeSpent;
 
-      const isCorrect = userAnswer.answer === questionData.questionId.correctAnswer;
-      questionData.isCorrect = isCorrect;
+      let isCorrect = false;
+      if (sessionQuestion.question && userAnswer.answer === sessionQuestion.question.correctAnswer) {
+        isCorrect = true;
+      }
 
       if (isCorrect) {
         correctAnswers++;
@@ -98,39 +119,84 @@ router.post('/submit', auth, async (req, res) => {
         score -= 5; // Always deduct 5 points for wrong answers
       }
 
-      // Update question statistics
-      await Question.findByIdAndUpdate(questionData.questionId._id, {
-        $inc: {
-          timesAnswered: 1,
-          correctCount: isCorrect ? 1 : 0
+      // Update Session Question
+      await prisma.quizSessionQuestion.update({
+        where: { id: sessionQuestion.id },
+        data: {
+          userAnswer: userAnswer.answer,
+          timeSpent,
+          isCorrect
         }
       });
+
+      // Update question statistics
+      if (sessionQuestion.question) {
+        await prisma.question.update({
+          where: { id: sessionQuestion.question.id },
+          data: {
+            timesAnswered: { increment: 1 },
+            correctCount: { increment: isCorrect ? 1 : 0 }
+          }
+        });
+      }
     }
 
+    const finalScore = Math.max(0, score);
+
     // Update quiz session
-    quizSession.score = Math.max(0, score); // Ensure score doesn't go below 0
-    quizSession.correctAnswers = correctAnswers;
-    quizSession.wrongAnswers = wrongAnswers;
-    quizSession.timeSpent = answers.reduce((total, answer) => total + (answer.timeSpent || 0), 0);
-    quizSession.isCompleted = true;
-    quizSession.completedAt = new Date();
+    await prisma.quizSession.update({
+      where: { id: quizSession.id },
+      data: {
+        score: finalScore,
+        correctAnswers,
+        wrongAnswers,
+        timeSpent: timeSpentTotal,
+        isCompleted: true,
+        completedAt: new Date()
+      }
+    });
 
-    await quizSession.save();
+    // Update user statistics & gamification
+    const userToUpdate = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const newTotalPoints = userToUpdate.totalPoints + finalScore;
+    
+    let newLevel = 1;
+    let newBadges = [...userToUpdate.badges];
 
-    // Update user statistics
-    const user = await User.findById(req.user.id);
-    user.totalPoints += Math.max(0, score);
-    user.gamesPlayed += 1;
-    user.correctAnswers += correctAnswers;
-    user.wrongAnswers += wrongAnswers;
-    await user.save();
+    if (newTotalPoints >= 5000) newLevel = 5;
+    else if (newTotalPoints >= 2000) newLevel = 4;
+    else if (newTotalPoints >= 1000) newLevel = 3;
+    else if (newTotalPoints >= 500) newLevel = 2;
+
+    const badgesByLevel = {
+      2: 'Novice',
+      3: 'Apprentice',
+      4: 'Expert',
+      5: 'Master'
+    };
+
+    if (badgesByLevel[newLevel] && !newBadges.includes(badgesByLevel[newLevel])) {
+      newBadges.push(badgesByLevel[newLevel]);
+    }
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        totalPoints: newTotalPoints,
+        gamesPlayed: userToUpdate.gamesPlayed + 1,
+        correctAnswers: userToUpdate.correctAnswers + correctAnswers,
+        wrongAnswers: userToUpdate.wrongAnswers + wrongAnswers,
+        level: newLevel,
+        badges: newBadges
+      }
+    });
 
     res.json({
-      score: Math.max(0, score),
+      score: finalScore,
       correctAnswers,
       wrongAnswers,
       totalQuestions: quizSession.totalQuestions,
-      timeSpent: quizSession.timeSpent,
+      timeSpent: timeSpentTotal,
       gameMode: quizSession.gameMode,
       category: quizSession.category.name
     });
@@ -143,18 +209,24 @@ router.post('/submit', auth, async (req, res) => {
 // Get user's quiz history
 router.get('/history', auth, async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
 
-    const quizSessions = await QuizSession.find({ userId: req.user.id, isCompleted: true })
-      .populate('category', 'name')
-      .sort({ completedAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await QuizSession.countDocuments({ userId: req.user.id, isCompleted: true });
+    const [sessions, total] = await Promise.all([
+      prisma.quizSession.findMany({
+        where: { userId: req.user.id, isCompleted: true },
+        include: { category: { select: { name: true } } },
+        orderBy: { completedAt: 'desc' },
+        take: limit,
+        skip: (page - 1) * limit
+      }),
+      prisma.quizSession.count({
+        where: { userId: req.user.id, isCompleted: true }
+      })
+    ]);
 
     res.json({
-      sessions: quizSessions,
+      sessions,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
       total
@@ -168,15 +240,20 @@ router.get('/history', auth, async (req, res) => {
 // Get quiz session details
 router.get('/session/:id', auth, async (req, res) => {
   try {
-    const quizSession = await QuizSession.findById(req.params.id)
-      .populate('questions.questionId')
-      .populate('category', 'name');
+    const id = parseInt(req.params.id);
+    const quizSession = await prisma.quizSession.findUnique({
+      where: { id },
+      include: {
+        questions: { include: { question: true } },
+        category: { select: { name: true } }
+      }
+    });
 
     if (!quizSession) {
       return res.status(404).json({ message: 'Quiz session not found' });
     }
 
-    if (quizSession.userId.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (quizSession.userId !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -191,35 +268,33 @@ router.get('/session/:id', auth, async (req, res) => {
 router.post('/multiplayer/create-room', auth, async (req, res) => {
   try {
     const { categoryId, totalQuestions = 10 } = req.body;
+    const catId = parseInt(categoryId);
     const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Get random questions from category
-    const questions = await Question.aggregate([
-      { $match: { category: categoryId, isActive: true } },
-      { $sample: { size: parseInt(totalQuestions) } }
-    ]);
+    const questions = await getRandomQuestions(catId, parseInt(totalQuestions));
 
     if (questions.length === 0) {
       return res.status(400).json({ message: 'No questions available in this category' });
     }
 
-    // Create quiz session for multiplayer
-    const quizSession = new QuizSession({
-      userId: req.user.id,
-      category: categoryId,
-      questions: questions.map(q => ({
-        questionId: q._id
-      })),
-      totalQuestions: questions.length,
-      gameMode: 'multiplayer',
-      roomId
+    const quizSession = await prisma.quizSession.create({
+      data: {
+        userId: req.user.id,
+        categoryId: catId,
+        totalQuestions: questions.length,
+        gameMode: 'multiplayer',
+        roomId,
+        questions: {
+          create: questions.map(q => ({
+            questionId: q.id
+          }))
+        }
+      }
     });
-
-    await quizSession.save();
 
     res.json({
       roomId,
-      sessionId: quizSession._id,
+      sessionId: quizSession.id,
       totalQuestions: questions.length
     });
   } catch (error) {
@@ -234,26 +309,34 @@ router.post('/multiplayer/join-room', auth, async (req, res) => {
     const { roomId } = req.body;
 
     // Find existing room
-    const existingSession = await QuizSession.findOne({ roomId, gameMode: 'multiplayer' });
+    const existingSession = await prisma.quizSession.findFirst({
+      where: { roomId, gameMode: 'multiplayer' },
+      include: { questions: true }
+    });
+
     if (!existingSession) {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    // Create new session for joining user
-    const quizSession = new QuizSession({
-      userId: req.user.id,
-      category: existingSession.category,
-      questions: existingSession.questions,
-      totalQuestions: existingSession.totalQuestions,
-      gameMode: 'multiplayer',
-      roomId
+    // Create new session for joining user with same questions
+    const quizSession = await prisma.quizSession.create({
+      data: {
+        userId: req.user.id,
+        categoryId: existingSession.categoryId,
+        totalQuestions: existingSession.totalQuestions,
+        gameMode: 'multiplayer',
+        roomId,
+        questions: {
+          create: existingSession.questions.map(q => ({
+            questionId: q.questionId
+          }))
+        }
+      }
     });
-
-    await quizSession.save();
 
     res.json({
       roomId,
-      sessionId: quizSession._id,
+      sessionId: quizSession.id,
       totalQuestions: quizSession.totalQuestions
     });
   } catch (error) {
@@ -262,6 +345,56 @@ router.post('/multiplayer/join-room', auth, async (req, res) => {
   }
 });
 
+// Join PIN quiz
+router.post('/pin/join', auth, async (req, res) => {
+  try {
+    const { code } = req.body;
+
+    const pin = await prisma.pin.findUnique({ where: { code } });
+    if (!pin || !pin.isActive) {
+      return res.status(400).json({ message: 'Invalid or inactive PIN' });
+    }
+    if (pin.expiresAt && new Date(pin.expiresAt) < new Date()) {
+      return res.status(400).json({ message: 'This PIN has expired' });
+    }
+
+    const questions = await prisma.question.findMany({
+      where: {
+        id: { in: pin.questionIds }
+      },
+      select: { id: true, question: true, options: true, difficulty: true }
+    });
+
+    if (questions.length === 0) {
+      return res.status(400).json({ message: 'No questions available for this PIN' });
+    }
+
+    const quizSession = await prisma.quizSession.create({
+      data: {
+        userId: req.user.id,
+        categoryId: pin.categoryId,
+        totalQuestions: questions.length,
+        gameMode: 'pin',
+        pin: code,
+        questions: {
+          create: questions.map(q => ({
+            questionId: q.id
+          }))
+        }
+      }
+    });
+
+    res.json({
+      sessionId: quizSession.id,
+      questions,
+      totalQuestions: questions.length,
+      categoryId: pin.categoryId,
+      wardName: pin.wardName
+    });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send('Server error');
+  }
+});
+
 module.exports = router;
-
-

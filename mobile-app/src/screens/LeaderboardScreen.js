@@ -10,25 +10,63 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
+import { API_URL } from '../config';
 
-const LeaderboardScreen = () => {
+const LeaderboardScreen = ({ navigation }) => {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Filters state
+  const [mode, setMode] = useState(''); // 'single', 'multiplayer', 'pin'
+  const [designation, setDesignation] = useState('');
+  const [city, setCity] = useState('');
+  const [hospital, setHospital] = useState('');
+  const [quizName, setQuizName] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     loadLeaderboard();
   }, []);
 
   const loadLeaderboard = async () => {
+    setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/users/leaderboard');
+      const params = new URLSearchParams();
+      if (mode) params.append('mode', mode);
+      if (designation) params.append('designation', designation);
+      if (city) params.append('city', city);
+      if (hospital) params.append('hospital', hospital);
+      if (quizName) params.append('quizName', quizName);
+
+      const response = await axios.get(`${API_URL}/api/users/leaderboard?${params.toString()}`);
       setLeaderboard(response.data);
     } catch (error) {
       console.error('Error loading leaderboard:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    setShowFilters(false);
+    loadLeaderboard();
+  };
+
+  const clearFilters = () => {
+    setMode('');
+    setDesignation('');
+    setCity('');
+    setHospital('');
+    setQuizName('');
+    // Notice we don't call loadLeaderboard immediately because state updates are async
+    // But we can trigger it in a slight timeout or just rely on a separate effect (or just call it with empty params directly)
+    setTimeout(() => {
+      setShowFilters(false);
+      // Hack to reload without state
+      axios.get(`${API_URL}/api/users/leaderboard`).then(res => setLeaderboard(res.data)).catch(console.error);
+    }, 0);
   };
 
   const onRefresh = async () => {
@@ -102,17 +140,89 @@ const LeaderboardScreen = () => {
         colors={['#3b82f6', '#1d4ed8']}
         style={styles.header}
       >
-        <View style={styles.headerContent}>
-          <Ionicons name="trophy" size={32} color="white" />
-          <Text style={styles.title}>Leaderboard</Text>
-          <Text style={styles.subtitle}>Top performers</Text>
+        <View style={styles.headerTop}>
+          <View style={{ width: 32 }} />
+          <View style={styles.headerContent}>
+            <Ionicons name="trophy" size={32} color="white" />
+            <Text style={styles.title}>Leaderboard</Text>
+            <Text style={styles.subtitle}>Top performers</Text>
+          </View>
+          <TouchableOpacity onPress={() => setShowFilters(!showFilters)} style={styles.filterBtn}>
+            <Ionicons name="filter" size={24} color="white" />
+          </TouchableOpacity>
         </View>
       </LinearGradient>
+
+      {showFilters && (
+        <View style={styles.filterContainer}>
+          <Text style={styles.filterTitle}>Filter Rankings</Text>
+          
+          <View style={styles.filterRow}>
+            <TextInput
+              style={styles.filterInput}
+              placeholder="City"
+              value={city}
+              onChangeText={setCity}
+            />
+            <TextInput
+              style={styles.filterInput}
+              placeholder="Hospital"
+              value={hospital}
+              onChangeText={setHospital}
+            />
+          </View>
+
+          <View style={styles.filterRow}>
+            <TextInput
+              style={styles.filterInput}
+              placeholder="Designation"
+              value={designation}
+              onChangeText={setDesignation}
+            />
+            <TextInput
+              style={styles.filterInput}
+              placeholder="Category / Ward Name"
+              value={quizName}
+              onChangeText={setQuizName}
+            />
+          </View>
+
+          <View style={styles.modeContainer}>
+            <TouchableOpacity 
+              style={[styles.modeBtn, mode === 'single' && styles.modeBtnActive]}
+              onPress={() => setMode(mode === 'single' ? '' : 'single')}
+            >
+              <Text style={[styles.modeBtnText, mode === 'single' && styles.modeBtnTextActive]}>Single</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.modeBtn, mode === 'multiplayer' && styles.modeBtnActive]}
+              onPress={() => setMode(mode === 'multiplayer' ? '' : 'multiplayer')}
+            >
+              <Text style={[styles.modeBtnText, mode === 'multiplayer' && styles.modeBtnTextActive]}>Multi</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.modeBtn, mode === 'pin' && styles.modeBtnActive]}
+              onPress={() => setMode(mode === 'pin' ? '' : 'pin')}
+            >
+              <Text style={[styles.modeBtnText, mode === 'pin' && styles.modeBtnTextActive]}>Ward</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.filterActions}>
+            <TouchableOpacity style={styles.clearBtn} onPress={clearFilters}>
+              <Text style={styles.clearBtnText}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.applyBtn} onPress={applyFilters}>
+              <Text style={styles.applyBtnText}>Apply Filters</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       <FlatList
         data={leaderboard}
         renderItem={renderLeaderboardItem}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item) => item.id}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -131,12 +241,25 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 50,
-    paddingBottom: 30,
+    paddingBottom: 20,
     paddingHorizontal: 24,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    width: '100%',
   },
   headerContent: {
     alignItems: 'center',
+    flex: 1,
+  },
+  filterBtn: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
   },
   title: {
     fontSize: 28,
@@ -223,6 +346,94 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     fontFamily: 'Inter-Medium',
+  },
+  filterContainer: {
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    marginTop: -10,
+    marginBottom: 10,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 10,
+  },
+  filterTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#1f2937',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  filterInput: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    padding: 10,
+    marginHorizontal: 4,
+    fontSize: 14,
+  },
+  modeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 4,
+    marginBottom: 16,
+    marginTop: 6,
+  },
+  modeBtn: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    paddingVertical: 8,
+    marginHorizontal: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modeBtnActive: {
+    backgroundColor: '#3b82f6',
+  },
+  modeBtnText: {
+    color: '#6b7280',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  modeBtnTextActive: {
+    color: 'white',
+  },
+  filterActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 4,
+  },
+  clearBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    marginRight: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+  },
+  clearBtnText: {
+    color: '#ef4444',
+    fontWeight: 'bold',
+  },
+  applyBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    marginLeft: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#3b82f6',
+  },
+  applyBtnText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
 

@@ -57,6 +57,9 @@ const ProfileScreen = ({ navigation }) => {
           </View>
           <Text style={styles.userName}>Dr. {user.doctorName}</Text>
           <Text style={styles.userDesignation}>{user.designation}</Text>
+          <View style={styles.levelBadge}>
+            <Text style={styles.levelText}>Level {user.level || 1}</Text>
+          </View>
           <View style={[styles.statusBadge, { backgroundColor: status.color }]}>
             <Text style={styles.statusText}>{status.text}</Text>
           </View>
@@ -148,6 +151,28 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
 
+        {/* Gamification Badges */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Badges</Text>
+          <View style={styles.badgesContainer}>
+            {user.badges && user.badges.length > 0 ? (
+              user.badges.map((badge, index) => (
+                <View key={index} style={styles.badgeItem}>
+                  <LinearGradient
+                    colors={['#fbbf24', '#f59e0b']}
+                    style={styles.badgeIcon}
+                  >
+                    <Ionicons name="star" size={24} color="white" />
+                  </LinearGradient>
+                  <Text style={styles.badgeText}>{badge}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noBadgesText}>Keep playing to earn badges!</Text>
+            )}
+          </View>
+        </View>
+
         {/* Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actions</Text>
@@ -230,6 +255,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
+  },
+  levelBadge: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 8,
+  },
+  levelText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   statusText: {
     color: 'white',
@@ -320,6 +357,39 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
     fontFamily: 'Inter-Regular',
+  },
+  badgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  badgeItem: {
+    alignItems: 'center',
+    width: 80,
+  },
+  badgeIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+  },
+  noBadgesText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontStyle: 'italic',
   },
   actionsCard: {
     backgroundColor: 'white',

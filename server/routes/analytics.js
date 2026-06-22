@@ -1,8 +1,5 @@
 const express = require('express');
-const User = require('../models/User');
-const QuizSession = require('../models/QuizSession');
-const Question = require('../models/Question');
-const Category = require('../models/Category');
+const prisma = require('../db');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -20,16 +17,14 @@ router.get('/overview', auth, async (req, res) => {
       totalQuestions,
       totalSessions,
       completedSessions,
-      totalPoints
+      totalPointsAgg
     ] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ isApproved: true }),
-      Question.countDocuments(),
-      QuizSession.countDocuments(),
-      QuizSession.countDocuments({ isCompleted: true }),
-      User.aggregate([
-        { $group: { _id: null, total: { $sum: '$totalPoints' } } }
-      ])
+      prisma.user.count(),
+      prisma.user.count({ where: { isApproved: true } }),
+      prisma.question.count(),
+      prisma.quizSession.count(),
+      prisma.quizSession.count({ where: { isCompleted: true } }),
+      prisma.user.aggregate({ _sum: { totalPoints: true } })
     ]);
 
     res.json({
@@ -39,7 +34,7 @@ router.get('/overview', auth, async (req, res) => {
       totalQuestions,
       totalSessions,
       completedSessions,
-      totalPointsEarned: totalPoints[0]?.total || 0
+      totalPointsEarned: totalPointsAgg._sum.totalPoints || 0
     });
   } catch (error) {
     console.error(error.message);
@@ -54,28 +49,34 @@ router.get('/user-activity', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { days = 30 } = req.query;
+    const days = parseInt(req.query.days) || 30;
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
+    startDate.setDate(startDate.getDate() - days);
 
     const [
       newUsers,
       activeUsers,
-      sessionsByDay
+      recentSessions
     ] = await Promise.all([
-      User.countDocuments({ createdAt: { $gte: startDate } }),
-      User.countDocuments({ lastLogin: { $gte: startDate } }),
-      QuizSession.aggregate([
-        { $match: { createdAt: { $gte: startDate } } },
-        {
-          $group: {
-            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            count: { $sum: 1 }
-          }
-        },
-        { $sort: { _id: 1 } }
-      ])
+      prisma.user.count({ where: { createdAt: { gte: startDate } } }),
+      prisma.user.count({ where: { lastLogin: { gte: startDate } } }),
+      prisma.quizSession.findMany({
+        where: { createdAt: { gte: startDate } },
+        select: { createdAt: true }
+      })
     ]);
+
+    // Aggregate sessions by day
+    const sessionsMap = {};
+    recentSessions.forEach(s => {
+      const dateKey = s.createdAt.toISOString().split('T')[0];
+      sessionsMap[dateKey] = (sessionsMap[dateKey] || 0) + 1;
+    });
+
+    const sessionsByDay = Object.keys(sessionsMap).sort().map(date => ({
+      _id: date,
+      count: sessionsMap[date]
+    }));
 
     res.json({
       newUsers,
@@ -95,55 +96,29 @@ router.get('/category-performance', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const categoryStats = await Category.aggregate([
-      {
-        $lookup: {
-          from: 'questions',
-          localField: '_id',
-          foreignField: 'category',
-          as: 'questions'
-        }
-      },
-      {
-        $lookup: {
-          from: 'quizsessions',
-          localField: '_id',
-          foreignField: 'category',
-          as: 'sessions'
-        }
-      },
-      {
-        $project: {
-          name: 1,
-          description: 1,
-          questionCount: { $size: '$questions' },
-          sessionCount: { $size: '$sessions' },
-          completedSessions: {
-            $size: {
-              $filter: {
-                input: '$sessions',
-                cond: { $eq: ['$$this.isCompleted', true] }
-              }
-            }
-          },
-          averageScore: {
-            $avg: {
-              $map: {
-                input: {
-                  $filter: {
-                    input: '$sessions',
-                    cond: { $eq: ['$$this.isCompleted', true] }
-                  }
-                },
-                as: 'session',
-                in: '$$session.score'
-              }
-            }
-          }
-        }
-      },
-      { $sort: { sessionCount: -1 } }
-    ]);
+    const categories = await prisma.category.findMany({
+      include: {
+        questions: { select: { id: true } },
+        quizSessions: { select: { isCompleted: true, score: true } }
+      }
+    });
+
+    const categoryStats = categories.map(cat => {
+      const completedSessions = cat.quizSessions.filter(s => s.isCompleted);
+      const averageScore = completedSessions.length > 0
+        ? completedSessions.reduce((acc, s) => acc + s.score, 0) / completedSessions.length
+        : 0;
+
+      return {
+        _id: cat.id,
+        name: cat.name,
+        description: cat.description,
+        questionCount: cat.questions.length,
+        sessionCount: cat.quizSessions.length,
+        completedSessions: completedSessions.length,
+        averageScore
+      };
+    }).sort((a, b) => b.sessionCount - a.sessionCount);
 
     res.json(categoryStats);
   } catch (error) {
@@ -159,42 +134,36 @@ router.get('/question-performance', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { categoryId, limit = 20 } = req.query;
-    let matchQuery = {};
+    const categoryId = parseInt(req.query.categoryId);
+    const limit = parseInt(req.query.limit) || 20;
 
+    let query = {};
     if (categoryId) {
-      matchQuery.category = categoryId;
+      query.categoryId = categoryId;
     }
 
-    const questionStats = await Question.aggregate([
-      { $match: matchQuery },
-      {
-        $project: {
-          question: 1,
-          category: 1,
-          difficulty: 1,
-          timesAnswered: 1,
-          correctCount: 1,
-          successRate: {
-            $cond: {
-              if: { $eq: ['$timesAnswered', 0] },
-              then: 0,
-              else: { $multiply: [{ $divide: ['$correctCount', '$timesAnswered'] }, 100] }
-            }
-          }
-        }
-      },
-      { $sort: { timesAnswered: -1 } },
-      { $limit: parseInt(limit) },
-      {
-        $lookup: {
-          from: 'categories',
-          localField: 'category',
-          foreignField: '_id',
-          as: 'categoryInfo'
-        }
+    const questions = await prisma.question.findMany({
+      where: query,
+      orderBy: { timesAnswered: 'desc' },
+      take: limit,
+      include: {
+        category: { select: { name: true } }
       }
-    ]);
+    });
+
+    const questionStats = questions.map(q => {
+      const successRate = q.timesAnswered === 0 ? 0 : (q.correctCount / q.timesAnswered) * 100;
+      return {
+        _id: q.id,
+        question: q.question,
+        category: q.categoryId,
+        categoryInfo: [q.category],
+        difficulty: q.difficulty,
+        timesAnswered: q.timesAnswered,
+        correctCount: q.correctCount,
+        successRate
+      };
+    });
 
     res.json(questionStats);
   } catch (error) {
@@ -210,12 +179,23 @@ router.get('/top-performers', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { limit = 10 } = req.query;
+    const limit = parseInt(req.query.limit) || 10;
 
-    const topPerformers = await User.find({ isApproved: true, isActive: true })
-      .select('doctorName specialty hospitalName totalPoints gamesPlayed correctAnswers wrongAnswers')
-      .sort({ totalPoints: -1 })
-      .limit(parseInt(limit));
+    const topPerformers = await prisma.user.findMany({
+      where: { isApproved: true, isActive: true },
+      select: {
+        id: true,
+        doctorName: true,
+        specialty: true,
+        hospitalName: true,
+        totalPoints: true,
+        gamesPlayed: true,
+        correctAnswers: true,
+        wrongAnswers: true
+      },
+      orderBy: { totalPoints: 'desc' },
+      take: limit
+    });
 
     res.json(topPerformers);
   } catch (error) {
@@ -231,27 +211,35 @@ router.get('/game-mode-stats', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const gameModeStats = await QuizSession.aggregate([
-      {
-        $group: {
-          _id: '$gameMode',
-          totalSessions: { $sum: 1 },
-          completedSessions: {
-            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] }
-          },
-          averageScore: {
-            $avg: {
-              $cond: [{ $eq: ['$isCompleted', true] }, '$score', null]
-            }
-          },
-          totalPoints: {
-            $sum: {
-              $cond: [{ $eq: ['$isCompleted', true] }, '$score', 0]
-            }
-          }
-        }
+    const sessions = await prisma.quizSession.findMany({
+      select: {
+        gameMode: true,
+        isCompleted: true,
+        score: true
       }
-    ]);
+    });
+
+    const statsMap = {};
+    sessions.forEach(s => {
+      if (!statsMap[s.gameMode]) {
+        statsMap[s.gameMode] = {
+          _id: s.gameMode,
+          totalSessions: 0,
+          completedSessions: 0,
+          totalPoints: 0
+        };
+      }
+      statsMap[s.gameMode].totalSessions++;
+      if (s.isCompleted) {
+        statsMap[s.gameMode].completedSessions++;
+        statsMap[s.gameMode].totalPoints += s.score;
+      }
+    });
+
+    const gameModeStats = Object.values(statsMap).map(stat => ({
+      ...stat,
+      averageScore: stat.completedSessions > 0 ? stat.totalPoints / stat.completedSessions : 0
+    }));
 
     res.json(gameModeStats);
   } catch (error) {
@@ -263,7 +251,7 @@ router.get('/game-mode-stats', auth, async (req, res) => {
 // Get user's personal analytics
 router.get('/personal', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -271,37 +259,48 @@ router.get('/personal', auth, async (req, res) => {
     const [
       totalSessions,
       completedSessions,
-      categoryStats,
+      completedSessionsData,
       recentSessions
     ] = await Promise.all([
-      QuizSession.countDocuments({ userId: req.user.id }),
-      QuizSession.countDocuments({ userId: req.user.id, isCompleted: true }),
-      QuizSession.aggregate([
-        { $match: { userId: req.user.id, isCompleted: true } },
-        {
-          $lookup: {
-            from: 'categories',
-            localField: 'category',
-            foreignField: '_id',
-            as: 'categoryInfo'
-          }
-        },
-        {
-          $group: {
-            _id: '$category',
-            categoryName: { $first: { $arrayElemAt: ['$categoryInfo.name', 0] } },
-            sessionsPlayed: { $sum: 1 },
-            averageScore: { $avg: '$score' },
-            bestScore: { $max: '$score' }
-          }
-        },
-        { $sort: { sessionsPlayed: -1 } }
-      ]),
-      QuizSession.find({ userId: req.user.id, isCompleted: true })
-        .populate('category', 'name')
-        .sort({ completedAt: -1 })
-        .limit(5)
+      prisma.quizSession.count({ where: { userId: req.user.id } }),
+      prisma.quizSession.count({ where: { userId: req.user.id, isCompleted: true } }),
+      prisma.quizSession.findMany({
+        where: { userId: req.user.id, isCompleted: true },
+        include: { category: { select: { name: true } } }
+      }),
+      prisma.quizSession.findMany({
+        where: { userId: req.user.id, isCompleted: true },
+        include: { category: { select: { name: true } } },
+        orderBy: { completedAt: 'desc' },
+        take: 5
+      })
     ]);
+
+    const catStatsMap = {};
+    completedSessionsData.forEach(s => {
+      if (!catStatsMap[s.categoryId]) {
+        catStatsMap[s.categoryId] = {
+          _id: s.categoryId,
+          categoryName: s.category.name,
+          sessionsPlayed: 0,
+          totalScore: 0,
+          bestScore: 0
+        };
+      }
+      catStatsMap[s.categoryId].sessionsPlayed++;
+      catStatsMap[s.categoryId].totalScore += s.score;
+      if (s.score > catStatsMap[s.categoryId].bestScore) {
+        catStatsMap[s.categoryId].bestScore = s.score;
+      }
+    });
+
+    const categoryStats = Object.values(catStatsMap).map(stat => ({
+      _id: stat._id,
+      categoryName: stat.categoryName,
+      sessionsPlayed: stat.sessionsPlayed,
+      averageScore: stat.totalScore / stat.sessionsPlayed,
+      bestScore: stat.bestScore
+    })).sort((a, b) => b.sessionsPlayed - a.sessionsPlayed);
 
     const accuracy = user.correctAnswers + user.wrongAnswers > 0 
       ? (user.correctAnswers / (user.correctAnswers + user.wrongAnswers) * 100).toFixed(2)
@@ -325,5 +324,3 @@ router.get('/personal', auth, async (req, res) => {
 });
 
 module.exports = router;
-
-

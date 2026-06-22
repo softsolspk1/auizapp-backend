@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const CategoryScreen = ({ navigation, route }) => {
   const { category } = route.params;
@@ -19,7 +20,7 @@ const CategoryScreen = ({ navigation, route }) => {
   const loadQuestions = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/questions/category/${category._id}?limit=20`);
+      const response = await axios.get(`${API_URL}/api/questions/category/${category.id}?limit=20`);
       setQuestions(response.data);
     } catch (error) {
       Alert.alert('Error', 'Failed to load questions');

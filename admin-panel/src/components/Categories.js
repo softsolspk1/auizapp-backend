@@ -38,7 +38,7 @@ const Categories = () => {
   const onSubmit = async (data) => {
     try {
       if (editingCategory) {
-        await axios.put(`/api/categories/${editingCategory._id}`, data);
+        await axios.put(`/api/categories/${editingCategory.id}`, data);
         toast.success('Category updated successfully');
       } else {
         await axios.post('/api/categories', data);
@@ -126,7 +126,7 @@ const Categories = () => {
       {/* Categories Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredCategories.map((category) => (
-          <div key={category._id} className="card">
+          <div key={category.id} className="card">
             <div className="flex items-start justify-between">
               <div className="flex items-center">
                 <FolderOpen className="h-8 w-8 text-primary-600 mr-3" />
@@ -157,7 +157,7 @@ const Categories = () => {
                   <Edit className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => handleDelete(category._id)}
+                  onClick={() => handleDelete(category.id)}
                   className="text-red-600 hover:text-red-900"
                   title="Delete Category"
                 >
