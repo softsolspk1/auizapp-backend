@@ -55,7 +55,8 @@ router.post('/register', [
         city,
         phoneNumber,
         email,
-        password: hashedPassword
+        password: hashedPassword,
+        isApproved: true
       }
     });
 

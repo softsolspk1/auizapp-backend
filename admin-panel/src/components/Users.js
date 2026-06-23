@@ -69,7 +69,10 @@ const Users = () => {
       });
       loadUsers();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to create user');
+      const errMsg = error.response?.data?.errors 
+        ? error.response.data.errors[0].msg 
+        : (error.response?.data?.message || 'Failed to create user');
+      toast.error(errMsg);
     } finally {
       setIsSubmitting(false);
     }
