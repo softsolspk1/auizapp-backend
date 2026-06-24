@@ -23,6 +23,9 @@ const Questions = () => {
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   useEffect(() => {
@@ -60,12 +63,31 @@ const Questions = () => {
     }
   };
 
+  const uploadImage = async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await axios.post('/api/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data.url;
+  };
+
   const onSubmit = async (data) => {
     try {
+      setIsUploading(true);
+      let imageUrl = imagePreview;
+      
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile);
+      }
+
       const questionData = {
         ...data,
         correctAnswer: parseInt(data.correctAnswer),
-        options: [data.option1, data.option2, data.option3, data.option4]
+        options: [data.option1, data.option2, data.option3, data.option4],
+        imageUrl
       };
       
       delete questionData.option1;
@@ -81,16 +103,18 @@ const Questions = () => {
         toast.success('Question created successfully');
       }
       loadQuestions();
-      setShowModal(false);
-      setEditingQuestion(null);
-      reset();
+      handleCloseModal();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to save question');
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleEdit = (question) => {
     setEditingQuestion(question);
+    setImagePreview(question.imageUrl || '');
+    setImageFile(null);
     reset({
       question: question.question,
       option1: question.options[0],
@@ -121,6 +145,8 @@ const Questions = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingQuestion(null);
+    setImageFile(null);
+    setImagePreview('');
     reset();
   };
 
@@ -221,6 +247,11 @@ const Questions = () => {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
                   {question.question}
                 </h3>
+                {question.imageUrl && (
+                  <div className="mb-3">
+                    <img src={question.imageUrl} alt="Question Attachment" className="max-h-32 object-contain rounded border" />
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
                   {question.options.map((option, index) => (
                     <div
@@ -343,6 +374,38 @@ const Questions = () => {
                   )}
                 </div>
                 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Question Image (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files[0]) {
+                        setImageFile(e.target.files[0]);
+                        setImagePreview(URL.createObjectURL(e.target.files[0]));
+                      }
+                    }}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                  />
+                  {imagePreview && (
+                    <div className="mt-2 relative inline-block">
+                      <img src={imagePreview} alt="Preview" className="h-20 w-20 object-cover rounded-md border" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImageFile(null);
+                          setImagePreview('');
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -461,11 +524,12 @@ const Questions = () => {
                     type="button"
                     onClick={handleCloseModal}
                     className="btn-secondary"
+                    disabled={isUploading}
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
-                    {editingQuestion ? 'Update' : 'Create'}
+                  <button type="submit" className="btn-primary" disabled={isUploading}>
+                    {isUploading ? 'Uploading...' : (editingQuestion ? 'Update' : 'Create')}
                   </button>
                 </div>
               </form>

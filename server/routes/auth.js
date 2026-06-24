@@ -175,6 +175,7 @@ router.get('/me', auth, async (req, res) => {
         city: true,
         phoneNumber: true,
         email: true,
+        profilePicture: true,
         isApproved: true,
         isActive: true,
         role: true,

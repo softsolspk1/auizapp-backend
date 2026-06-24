@@ -50,10 +50,13 @@ router.post('/', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { name, description } = req.body;
+    const { name, description, isActive, imageUrl } = req.body;
 
-    // Check if category already exists
-    const existingCategory = await prisma.category.findUnique({ where: { name } });
+    // Check if category exists
+    const existingCategory = await prisma.category.findUnique({
+      where: { name }
+    });
+
     if (existingCategory) {
       return res.status(400).json({ message: 'Category already exists' });
     }
@@ -61,7 +64,9 @@ router.post('/', auth, async (req, res) => {
     const category = await prisma.category.create({
       data: {
         name,
-        description
+        description,
+        isActive: isActive !== undefined ? isActive : true,
+        imageUrl
       }
     });
 
@@ -79,7 +84,7 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { name, description, isActive } = req.body;
+    const { name, description, isActive, imageUrl } = req.body;
     const id = parseInt(req.params.id);
 
     const category = await prisma.category.findUnique({ where: { id } });
@@ -92,7 +97,8 @@ router.put('/:id', auth, async (req, res) => {
       data: {
         name: name || category.name,
         description: description !== undefined ? description : category.description,
-        isActive: isActive !== undefined ? isActive : category.isActive
+        isActive: isActive !== undefined ? isActive : category.isActive,
+        ...(imageUrl !== undefined && { imageUrl })
       }
     });
 

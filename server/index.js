@@ -31,6 +31,7 @@ app.use('/api/questions', require('./routes/questions'));
 app.use('/api/quiz', require('./routes/quiz'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/pins', require('./routes/pins'));
+app.use('/api/upload', require('./routes/upload'));
 
 // Socket.io for real-time multiplayer
 io.on('connection', (socket) => {

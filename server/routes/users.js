@@ -16,6 +16,7 @@ const router = express.Router();
       city: true,
       phoneNumber: true,
       email: true,
+      profilePicture: true,
       isApproved: true,
       isActive: true,
       role: true,
@@ -363,6 +364,26 @@ router.get('/leaderboard', auth, async (req, res) => {
     });
 
     res.json(users);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// Update user profile (self)
+router.put('/profile', auth, async (req, res) => {
+  try {
+    const { profilePicture } = req.body;
+    
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        ...(profilePicture !== undefined && { profilePicture })
+      },
+      select: excludePassword
+    });
+
+    res.json({ message: 'Profile updated successfully', user: updatedUser });
   } catch (error) {
     console.error(error.message);
     res.status(500).send('Server error');

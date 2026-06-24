@@ -18,6 +18,9 @@ const Categories = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   useEffect(() => {
@@ -35,26 +38,48 @@ const Categories = () => {
     }
   };
 
+  const uploadImage = async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await axios.post('/api/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data.url;
+  };
+
   const onSubmit = async (data) => {
     try {
+      setIsUploading(true);
+      let imageUrl = imagePreview;
+      
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile);
+      }
+      
+      const payload = { ...data, imageUrl };
+      
       if (editingCategory) {
-        await axios.put(`/api/categories/${editingCategory.id}`, data);
+        await axios.put(`/api/categories/${editingCategory.id}`, payload);
         toast.success('Category updated successfully');
       } else {
-        await axios.post('/api/categories', data);
+        await axios.post('/api/categories', payload);
         toast.success('Category created successfully');
       }
       loadCategories();
-      setShowModal(false);
-      setEditingCategory(null);
-      reset();
+      handleCloseModal();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to save category');
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleEdit = (category) => {
     setEditingCategory(category);
+    setImagePreview(category.imageUrl || '');
+    setImageFile(null);
     reset({
       name: category.name,
       description: category.description,
@@ -78,6 +103,8 @@ const Categories = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingCategory(null);
+    setImageFile(null);
+    setImagePreview('');
     reset();
   };
 
@@ -226,16 +253,49 @@ const Categories = () => {
                   </div>
                 )}
                 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category Image
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files[0]) {
+                        setImageFile(e.target.files[0]);
+                        setImagePreview(URL.createObjectURL(e.target.files[0]));
+                      }
+                    }}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                  />
+                  {imagePreview && (
+                    <div className="mt-2 relative inline-block">
+                      <img src={imagePreview} alt="Preview" className="h-20 w-20 object-cover rounded-md border" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImageFile(null);
+                          setImagePreview('');
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"
                     onClick={handleCloseModal}
                     className="btn-secondary"
+                    disabled={isUploading}
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
-                    {editingCategory ? 'Update' : 'Create'}
+                  <button type="submit" className="btn-primary" disabled={isUploading}>
+                    {isUploading ? 'Uploading...' : (editingCategory ? 'Update' : 'Create')}
                   </button>
                 </div>
               </form>

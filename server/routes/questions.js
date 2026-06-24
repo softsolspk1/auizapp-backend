@@ -75,7 +75,7 @@ router.post('/', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { question, options, correctAnswer, explanation, category, difficulty } = req.body;
+    const { question, options, correctAnswer, explanation, category, difficulty, imageUrl } = req.body;
 
     // Validate options
     if (!options || options.length !== 4) {
@@ -102,7 +102,8 @@ router.post('/', auth, async (req, res) => {
         correctAnswer,
         explanation,
         categoryId,
-        difficulty: difficulty || 'medium'
+        difficulty: difficulty || 'medium',
+        imageUrl
       }
     });
 
@@ -127,7 +128,7 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     const id = parseInt(req.params.id);
-    const { question, options, correctAnswer, explanation, difficulty, isActive } = req.body;
+    const { question, options, correctAnswer, explanation, difficulty, isActive, imageUrl } = req.body;
 
     const existingQuestion = await prisma.question.findUnique({ where: { id } });
     if (!existingQuestion) {
@@ -152,7 +153,8 @@ router.put('/:id', auth, async (req, res) => {
         correctAnswer: correctAnswer !== undefined ? correctAnswer : existingQuestion.correctAnswer,
         explanation: explanation || existingQuestion.explanation,
         difficulty: difficulty || existingQuestion.difficulty,
-        isActive: isActive !== undefined ? isActive : existingQuestion.isActive
+        isActive: isActive !== undefined ? isActive : existingQuestion.isActive,
+        ...(imageUrl !== undefined && { imageUrl })
       }
     });
 
