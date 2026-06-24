@@ -6,27 +6,28 @@ const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
 
-const excludePassword = {
-  id: true,
-  doctorName: true,
-  designation: true,
-  specialty: true,
-  hospitalName: true,
-  pmdcNumber: true,
-  city: true,
-  phoneNumber: true,
-  email: true,
-  isApproved: true,
-  isActive: true,
-  role: true,
-  totalPoints: true,
-  gamesPlayed: true,
-  correctAnswers: true,
-  wrongAnswers: true,
-  lastLogin: true,
-  createdAt: true,
-  updatedAt: true
-};
+    const excludePassword = {
+      id: true,
+      doctorName: true,
+      designation: true,
+      specialty: true,
+      hospitalName: true,
+      pmdcNumber: true,
+      city: true,
+      phoneNumber: true,
+      email: true,
+      isApproved: true,
+      isActive: true,
+      role: true,
+      permissions: true,
+      totalPoints: true,
+      gamesPlayed: true,
+      correctAnswers: true,
+      wrongAnswers: true,
+      lastLogin: true,
+      createdAt: true,
+      updatedAt: true
+    };
 
 // Get all users (admin only)
 router.get('/', auth, async (req, res) => {
@@ -70,7 +71,7 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { doctorName, designation, specialty, hospitalName, pmdcNumber, city, phoneNumber, email, password, role } = req.body;
+    const { doctorName, designation, specialty, hospitalName, pmdcNumber, city, phoneNumber, email, password, role, permissions } = req.body;
 
     // Check if user already exists
     let existingUser = await prisma.user.findFirst({
@@ -102,6 +103,7 @@ router.post('/', [
         email,
         password: hashedPassword,
         role,
+        permissions: role === 'subadmin' && Array.isArray(permissions) ? permissions : [],
         isApproved: true,
         isActive: true
       },
@@ -219,7 +221,7 @@ router.put('/:id/role', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { role } = req.body;
+    const { role, permissions } = req.body;
     if (!['user', 'subadmin'].includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });
     }
@@ -237,7 +239,10 @@ router.put('/:id/role', auth, async (req, res) => {
 
     const updatedUser = await prisma.user.update({
       where: { id },
-      data: { role },
+      data: { 
+        role,
+        permissions: role === 'subadmin' && Array.isArray(permissions) ? permissions : []
+      },
       select: excludePassword
     });
 

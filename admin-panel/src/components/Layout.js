@@ -28,9 +28,10 @@ const Layout = ({ children }) => {
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   ];
 
-  const filteredNavigation = user?.role === 'subadmin' 
-    ? navigation.filter(item => item.name === 'PINs')
-    : navigation;
+  const filteredNavigation = user?.role === 'admin' 
+    ? navigation
+    : navigation.filter(item => user?.permissions?.includes(item.name.toLowerCase()) || 
+        (item.name === 'Dashboard' && user?.permissions?.includes('dashboard')));
 
   const isCurrentPath = (path) => {
     if (path === '/' && location.pathname === '/') return true;

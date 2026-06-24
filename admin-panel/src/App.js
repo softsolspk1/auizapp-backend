@@ -33,7 +33,7 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-function AdminOnlyRoute({ children }) {
+function AdminOnlyRoute({ children, feature }) {
   const { user, loading } = useAuth();
   
   if (loading) {
@@ -44,15 +44,29 @@ function AdminOnlyRoute({ children }) {
     );
   }
   
-  if (!user || user.role !== 'admin') {
-    // If subadmin tries to access admin-only route, redirect to pins
-    if (user && user.role === 'subadmin') {
-      return <Navigate to="/pins" />;
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  if (user.role === 'admin') {
+    return children;
+  }
+  
+  if (user.role === 'subadmin') {
+    if (feature && user.permissions?.includes(feature)) {
+      return children;
     }
+    
+    // Redirect to the first available feature if they don't have access to this one
+    if (user.permissions && user.permissions.length > 0) {
+      const fallback = user.permissions[0];
+      return <Navigate to={`/${fallback === 'dashboard' ? '' : fallback.toLowerCase()}`} />;
+    }
+    
     return <Navigate to="/login" />;
   }
   
-  return children;
+  return <Navigate to="/login" />;
 }
 
 function App() {
@@ -64,42 +78,42 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={
-              <AdminOnlyRoute>
+              <AdminOnlyRoute feature="dashboard">
                 <Layout>
                   <Dashboard />
                 </Layout>
               </AdminOnlyRoute>
             } />
             <Route path="/users" element={
-              <AdminOnlyRoute>
+              <AdminOnlyRoute feature="users">
                 <Layout>
                   <Users />
                 </Layout>
               </AdminOnlyRoute>
             } />
             <Route path="/categories" element={
-              <AdminOnlyRoute>
+              <AdminOnlyRoute feature="categories">
                 <Layout>
                   <Categories />
                 </Layout>
               </AdminOnlyRoute>
             } />
             <Route path="/questions" element={
-              <AdminOnlyRoute>
+              <AdminOnlyRoute feature="questions">
                 <Layout>
                   <Questions />
                 </Layout>
               </AdminOnlyRoute>
             } />
             <Route path="/pins" element={
-              <ProtectedRoute>
+              <AdminOnlyRoute feature="pins">
                 <Layout>
                   <Pins />
                 </Layout>
-              </ProtectedRoute>
+              </AdminOnlyRoute>
             } />
             <Route path="/analytics" element={
-              <AdminOnlyRoute>
+              <AdminOnlyRoute feature="analytics">
                 <Layout>
                   <Analytics />
                 </Layout>

@@ -64,7 +64,8 @@ router.post('/register', [
     const payload = {
       user: {
         id: user.id,
-        role: user.role
+        role: user.role,
+        permissions: user.permissions
       }
     };
 
@@ -77,7 +78,8 @@ router.post('/register', [
           doctorName: user.doctorName,
           email: user.email,
           isApproved: user.isApproved,
-          role: user.role
+          role: user.role,
+          permissions: user.permissions
         }
       });
     });
@@ -132,7 +134,8 @@ router.post('/login', [
     const payload = {
       user: {
         id: user.id,
-        role: user.role
+        role: user.role,
+        permissions: user.permissions
       }
     };
 
@@ -146,6 +149,7 @@ router.post('/login', [
           email: user.email,
           isApproved: user.isApproved,
           role: user.role,
+          permissions: user.permissions,
           totalPoints: user.totalPoints
         }
       });
@@ -174,6 +178,7 @@ router.get('/me', auth, async (req, res) => {
         isApproved: true,
         isActive: true,
         role: true,
+        permissions: true,
         totalPoints: true,
         gamesPlayed: true,
         correctAnswers: true,

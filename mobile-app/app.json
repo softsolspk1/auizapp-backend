@@ -21,12 +21,16 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "package": "com.softsols026.igenius"
     },
     "web": {
       "favicon": "./assets/logo.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "36fad6d2-4050-4db7-8936-0246cf5b681f"
+      }
     }
   }
 }
-
-

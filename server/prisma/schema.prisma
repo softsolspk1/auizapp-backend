@@ -21,6 +21,7 @@ model User {
   isApproved     Boolean       @default(false)
   isActive       Boolean       @default(true)
   role           String        @default("user") // "user" or "admin"
+  permissions    String[]      @default([]) // For subadmin specific access
   totalPoints    Int           @default(0)
   gamesPlayed    Int           @default(0)
   correctAnswers Int           @default(0)

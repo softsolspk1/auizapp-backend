@@ -9,8 +9,13 @@ import {
   UserX,
   Shield,
   ShieldOff,
-  Plus
+  Plus,
+  Download,
+  FileText
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -20,6 +25,8 @@ const Users = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [roleFormData, setRoleFormData] = useState({ userId: null, role: 'user', permissions: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     doctorName: '',
@@ -31,8 +38,18 @@ const Users = () => {
     phoneNumber: '',
     email: '',
     password: '',
-    role: 'user'
+    role: 'user',
+    permissions: []
   });
+
+  const availableFeatures = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'users', label: 'Users' },
+    { id: 'categories', label: 'Categories' },
+    { id: 'questions', label: 'Questions' },
+    { id: 'pins', label: 'PINs' },
+    { id: 'analytics', label: 'Analytics' }
+  ];
 
   useEffect(() => {
     loadUsers();
@@ -56,6 +73,26 @@ const Users = () => {
     });
   };
 
+  const handlePermissionToggle = (featureId, isRoleModal = false) => {
+    if (isRoleModal) {
+      setRoleFormData(prev => {
+        const current = prev.permissions || [];
+        const updated = current.includes(featureId)
+          ? current.filter(id => id !== featureId)
+          : [...current, featureId];
+        return { ...prev, permissions: updated };
+      });
+    } else {
+      setFormData(prev => {
+        const current = prev.permissions || [];
+        const updated = current.includes(featureId)
+          ? current.filter(id => id !== featureId)
+          : [...current, featureId];
+        return { ...prev, permissions: updated };
+      });
+    }
+  };
+
   const handleAddUser = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -65,7 +102,7 @@ const Users = () => {
       setShowAddUserModal(false);
       setFormData({
         doctorName: '', designation: '', specialty: '', hospitalName: '',
-        pmdcNumber: '', city: '', phoneNumber: '', email: '', password: '', role: 'user'
+        pmdcNumber: '', city: '', phoneNumber: '', email: '', password: '', role: 'user', permissions: []
       });
       loadUsers();
     } catch (error) {
@@ -109,12 +146,36 @@ const Users = () => {
   };
 
   const handleRoleChange = async (userId, newRole) => {
+    if (newRole === 'subadmin') {
+      const user = users.find(u => u.id === userId);
+      setRoleFormData({ userId, role: 'subadmin', permissions: user?.permissions || [] });
+      setShowRoleModal(true);
+      return;
+    }
     try {
       await axios.put(`/api/users/${userId}/role`, { role: newRole });
       toast.success(`User role updated to ${newRole}`);
       loadUsers();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to update user role');
+    }
+  };
+
+  const submitRoleChange = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await axios.put(`/api/users/${roleFormData.userId}/role`, { 
+        role: roleFormData.role,
+        permissions: roleFormData.permissions
+      });
+      toast.success(`User role updated to ${roleFormData.role}`);
+      setShowRoleModal(false);
+      loadUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update user role');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -131,6 +192,58 @@ const Users = () => {
     
     return matchesSearch && matchesFilter;
   });
+
+  const exportToExcel = () => {
+    const dataToExport = filteredUsers.map(user => ({
+      'Doctor Name': user.doctorName,
+      'Designation': user.designation,
+      'Specialty': user.specialty,
+      'Hospital': user.hospitalName,
+      'PMDC Number': user.pmdcNumber,
+      'City': user.city,
+      'Phone': user.phoneNumber,
+      'Email': user.email,
+      'Role': user.role,
+      'Status': user.isActive ? (user.isApproved ? 'Active' : 'Pending') : 'Inactive',
+      'Total Points': user.totalPoints,
+      'Games Played': user.gamesPlayed
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Users");
+    XLSX.writeFile(wb, "users_export.xlsx");
+    toast.success('Excel exported successfully');
+  };
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    doc.text("Users Report", 14, 15);
+    
+    const tableColumn = ["Name", "Specialty", "Hospital", "PMDC", "Role", "Points"];
+    const tableRows = [];
+
+    filteredUsers.forEach(user => {
+      const userData = [
+        user.doctorName,
+        user.specialty,
+        user.hospitalName,
+        user.pmdcNumber,
+        user.role,
+        user.totalPoints
+      ];
+      tableRows.push(userData);
+    });
+
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 20,
+    });
+    
+    doc.save("users_export.pdf");
+    toast.success('PDF exported successfully');
+  };
 
   const getStatusBadge = (user) => {
     if (!user.isApproved) {
@@ -167,13 +280,29 @@ const Users = () => {
           <h1 className="text-2xl font-bold text-gray-900">Users Management</h1>
           <p className="text-gray-600">Manage user accounts and approvals</p>
         </div>
-        <button
-          onClick={() => setShowAddUserModal(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          Add User
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={exportToExcel}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+          >
+            <Download className="h-5 w-5" />
+            Excel
+          </button>
+          <button
+            onClick={exportToPDF}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
+          >
+            <FileText className="h-5 w-5" />
+            PDF
+          </button>
+          <button
+            onClick={() => setShowAddUserModal(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="h-5 w-5" />
+            Add User
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -274,13 +403,25 @@ const Users = () => {
                       
                       {user.role !== 'admin' && (
                         user.role === 'subadmin' ? (
-                          <button
-                            onClick={() => handleRoleChange(user.id, 'user')}
-                            className="text-orange-600 hover:text-orange-900"
-                            title="Remove Sub-Admin"
-                          >
-                            <ShieldOff className="h-5 w-5" />
-                          </button>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => {
+                                setRoleFormData({ userId: user.id, role: 'subadmin', permissions: user.permissions || [] });
+                                setShowRoleModal(true);
+                              }}
+                              className="text-indigo-600 hover:text-indigo-900"
+                              title="Edit Permissions"
+                            >
+                              <Shield className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={() => handleRoleChange(user.id, 'user')}
+                              className="text-orange-600 hover:text-orange-900"
+                              title="Remove Sub-Admin"
+                            >
+                              <ShieldOff className="h-5 w-5" />
+                            </button>
+                          </div>
                         ) : (
                           <button
                             onClick={() => handleRoleChange(user.id, 'subadmin')}
@@ -444,6 +585,25 @@ const Users = () => {
                   </div>
                 </div>
 
+                {formData.role === 'subadmin' && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Sub-Admin Permissions</label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {availableFeatures.map(feature => (
+                        <label key={feature.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={formData.permissions?.includes(feature.id)}
+                            onChange={() => handlePermissionToggle(feature.id)}
+                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-gray-700">{feature.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-6 flex justify-end space-x-3">
                   <button
                     type="button"
@@ -458,6 +618,61 @@ const Users = () => {
                     className="btn-primary"
                   >
                     {isSubmitting ? 'Creating...' : 'Create User'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Role Change Modal */}
+      {showRoleModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-[500px] shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Manage Sub-Admin Permissions</h3>
+                <button
+                  onClick={() => setShowRoleModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <form onSubmit={submitRoleChange} className="space-y-4">
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Accessible Features</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    {availableFeatures.map(feature => (
+                      <label key={feature.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={roleFormData.permissions?.includes(feature.id)}
+                          onChange={() => handlePermissionToggle(feature.id, true)}
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 w-4 h-4"
+                        />
+                        <span className="text-sm text-gray-700 font-medium">{feature.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowRoleModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="btn-primary"
+                  >
+                    {isSubmitting ? 'Saving...' : 'Save Permissions'}
                   </button>
                 </div>
               </form>
